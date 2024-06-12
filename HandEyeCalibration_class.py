@@ -4,6 +4,9 @@ import glob
 import matplotlib.pyplot as plt
 import os
 
+import csv
+from scipy.spatial.transform import Rotation as Rot
+
 class CameraCalibration:
     """Camera calibration class, this class takes as input a folder with images and a folder with the corresponding Base2endeffector transforms
     and outputs the intrinsic matrix in a .npz file. It also performs hand-eye calibration and saves those results in a .npz file.
@@ -16,7 +19,7 @@ class CameraCalibration:
     ShowCorners: if True, it will show the chessboard corners for each image, default is False
 
     """
-    def __init__(self, image_folder, Transforms_folder, pattern_size=(4, 7), square_size=33/1000, ShowProjectError=False, ShowCorners=False):
+    def __init__(self, image_folder, pattern_size=(4, 7), square_size=33/1000, ShowProjectError=False, ShowCorners=False):
 
         #Initiate parameters
         self.pattern_size = pattern_size
@@ -24,10 +27,21 @@ class CameraCalibration:
 
         #load images and joint positions
         self.image_files = sorted(glob.glob(f'{image_folder}/*.png'))
-        self.transform_files = sorted(glob.glob(f'{Transforms_folder}/*.npz'))
+        # self.transform_files = sorted(glob.glob(f'{Transforms_folder}/*.npz'))
         self.images = [cv2.imread(f) for f in self.image_files]
         self.images = [cv2.cvtColor(img, cv2.COLOR_RGB2BGR) for img in self.images]
-        self.All_T_base2EE_list = [np.load(f)['arr_0'] for f in self.transform_files]
+
+        # self.All_T_base2EE_list = [np.load(f)['arr_0'] for f in self.transform_files]
+        end_to_base_quat = []
+        with open(image_folder + "JointStateSteps.csv", 'r') as file:
+            csvreader = csv.reader(file)
+            for row in csvreader:
+                if 'marker' in row:
+                    continue
+                row_list = [float(x) for x in row[0].split(',')]
+                end_to_base_quat.append(row_list) 
+        end_to_base_quat = np.array(end_to_base_quat)
+        self.All_T_base2EE_list = end_to_base_quat
 
         #find chessboard corners and index of images with chessboard corners
         self.chessboard_corners, self.IndexWithImg = self.find_chessboard_corners(self.images, self.pattern_size, ShowCorners=ShowCorners)
@@ -57,11 +71,19 @@ class CameraCalibration:
         self.T_cam2target = [T[:3, 3] for T in self.T_cam2target]   #4x4 transformation matrix
 
         #Calculate T_Base2EE
-
-        self.TEE2Base = [np.linalg.inv(T) for T in self.T_base2EE_list]
-        self.REE2Base = [T[:3, :3] for T in self.TEE2Base]
+        self.REE2Base, self.R_vecEE2Base, self.tEE2Base = [], [], []
+        for i in range(len(self.T_base2EE_list)):
+            rot = Rot.from_quat(self.T_base2EE_list[i][3:]).as_matrix() #quat scalar-last (x, y, z, w) format
+            homo_matrix = np.eye(4)
+            homo_matrix[:3, :3] = rot
+            homo_matrix[:3, 3] = self.T_base2EE_list[i][0:3]
+            inv_homo_matrix = np.linalg.inv(homo_matrix)
+            self.REE2Base.append(inv_homo_matrix[:3, :3])
+            self.tEE2Base.append(inv_homo_matrix[:3, 3].reshape((3,1)))
+        # self.TEE2Base = [np.linalg.inv(T) for T in self.T_base2EE_list]
+        # self.REE2Base = [T[:3, :3] for T in self.TEE2Base]
         self.R_vecEE2Base = [cv2.Rodrigues(R)[0] for R in self.REE2Base]
-        self.tEE2Base = [T[:3, 3] for T in self.TEE2Base]
+        # self.tEE2Base = [T[:3, 3] for T in self.TEE2Base]
 
         #Create folder to save final transforms
         if not os.path.exists("FinalTransforms"):
@@ -220,6 +242,5 @@ class CameraCalibration:
 
 if __name__== "__main__":
     # Create an instance of the class
-    image_folder = "Cal2/RGBImgs/"
-    PoseFolder = "Cal2/T_base2ee/"
-    calib = CameraCalibration(image_folder, PoseFolder,ShowProjectError=True)
+    image_folder = "2024-06-06/"
+    calib = CameraCalibration(image_folder, pattern_size=(8, 9), square_size=0.02, ShowProjectError=True, ShowCorners=True)
