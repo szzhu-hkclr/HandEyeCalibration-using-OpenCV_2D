@@ -24,6 +24,7 @@ class CameraCalibration:
         #Initiate parameters
         self.pattern_size = pattern_size
         self.square_size = square_size
+        self.objpoints, self.imgpoints, self.rvecs, self.tvecs, self.intrinsic_matrix, self.dist_coeffs = [], [], [], [], [], []
 
         #load images and joint positions
         self.image_files = sorted(glob.glob(f'{image_folder}/*.png'))
@@ -88,19 +89,31 @@ class CameraCalibration:
         #Create folder to save final transforms
         if not os.path.exists("FinalTransforms"):
             os.mkdir("FinalTransforms")
+
+        methods = [
+            ('Tsai-Lenz', cv2.CALIB_HAND_EYE_TSAI),
+            ('Park', cv2.CALIB_HAND_EYE_PARK),
+            ('Horaud', cv2.CALIB_HAND_EYE_HORAUD),
+            ('Andreff', cv2.CALIB_HAND_EYE_ANDREFF),
+            ('Daniilidis', cv2.CALIB_HAND_EYE_DANIILIDIS)
+        ]
+
+        best_method = None
+        # unbounded upper value for comparison. Useful for finding lowest values
+        best_rms_error = float('inf')
+
         #solve hand-eye calibration
-        for i in range(0, 5):
-            print("Method:", i)
+        for method_name, method in methods:
             self.R_cam2gripper, self.t_cam2gripper = cv2.calibrateHandEye(
                 self.R_cam2target,
                 self.T_cam2target,
                 self.R_vecEE2Base,
                 self.tEE2Base,
-                method=i
+                method=method
             )
-
+            
             #print and save each results as .npz file
-            print("The results for method", i, "are:")
+            print(f"The Results for Method {method_name}:")
             print("R_cam2gripper:", self.R_cam2gripper)
             print("t_cam2gripper:", self.t_cam2gripper)
             #Create 4x4 transfromation matrix
@@ -112,11 +125,27 @@ class CameraCalibration:
             self.T_gripper2cam = np.linalg.inv(self.T_cam2gripper)
             np.savez(f"FinalTransforms/T_gripper2cam_Method_{i}.npz", self.T_gripper2cam)
 
+            # Recalculate reprojection error with this hand-eye calibration result
+            # _, _, rms_error = self.calculate_projection_error(self.objpoints, self.imgpoints, self.rvecs, self.tvecs, self.intrinsic_matrix, self.dist_coeffs)
+            # print(f"Method: {method_name}, RMS Reprojection Error: {rms_error}")
+            # if rms_error < best_rms_error:
+            #     best_rms_error = rms_error
+            #     best_method = method_name        
+        
         #solve hand-eye calibration using calibrateRobotWorldHandEye
-        for i in range(0,2):
-            self.R_base2world, self.t_base2world, self.R_gripper2cam, self.t_gripper2cam= cv2.calibrateRobotWorldHandEye( self.RTarget2Cam, self.TTarget2Cam, self.REE2Base, self.tEE2Base, method=i)
+        robot_world_methods = [
+            ('Shan', cv2.CALIB_ROBOT_WORLD_HAND_EYE_SHAH),
+            ('Li', cv2.CALIB_ROBOT_WORLD_HAND_EYE_LI)
+        ]
+        for robot_world_method_name, robot_world_method in robot_world_methods:
+            self.R_base2world, self.t_base2world, self.R_gripper2cam, self.t_gripper2cam= cv2.calibrateRobotWorldHandEye(
+                self.RTarget2Cam,
+                self.TTarget2Cam,
+                self.REE2Base,
+                self.tEE2Base,
+                method=robot_world_method)
             #print and save each results as .npz file
-            print("The results for method using calibrateRobotWorldHandEye", i+4, "are:")
+            print(f"The Results for Method calibrateRobotWorldHandEye {robot_world_method_name}:")
             print("R_cam2gripper:", self.R_gripper2cam)
             print("t_cam2gripper:", self.t_gripper2cam)
             #Create 4x4 transfromation matrix T_gripper2cam
@@ -127,6 +156,15 @@ class CameraCalibration:
             #save inverse too
             self.T_cam2gripper = np.linalg.inv(self.T_gripper2cam)
             np.savez(f"FinalTransforms/T_cam2gripper_Method_{i+4}.npz", self.T_cam2gripper)
+
+            # Recalculate reprojection error with this hand-eye calibration result
+            # _, _, rms_error = self.calculate_projection_error(self.objpoints, self.imgpoints, self.rvecs, self.tvecs, self.intrinsic_matrix, self.dist_coeffs)
+            # print(f"Method: {robot_world_method_name}, RMS Reprojection Error: {rms_error}")
+            # if rms_error < best_rms_error:
+            #     best_rms_error = rms_error
+            #     best_method = robot_world_method_name
+
+        # print(f"Best Hand-Eye Calibration Method: {best_method} with RMS Error: {best_rms_error}")
 
     def find_chessboard_corners(self, images, pattern_size, ShowCorners=False):
         """Finds the chessboard patterns and, if ShowImage is True, shows the images with the corners"""
@@ -192,37 +230,50 @@ class CameraCalibration:
     def calculate_intrinsics(self, chessboard_corners, IndexWithImg, pattern_size, square_size, ImgSize, ShowProjectError=False):
         """Calculates the intrinc camera parameters fx, fy, cx, cy from the images"""
         # Find the corners of the chessboard in the image
-        imgpoints = chessboard_corners
+        # imgpoints = chessboard_corners
+        self.imgpoints = chessboard_corners
         # Find the corners of the chessboard in the real world
-        objpoints = []
+        # objpoints = []
+        if self.objpoints:
+            self.objpoints = []
+
         for i in range(len(IndexWithImg)):
             objp = np.zeros((pattern_size[0] * pattern_size[1], 3), np.float32)
             objp[:, :2] = np.mgrid[0:pattern_size[0], 0:pattern_size[1]].T.reshape(-1, 2) * square_size
-            objpoints.append(objp)
+            self.objpoints.append(objp)
         # Find the intrinsic matrix
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, ImgSize, None, None)
+        ret, self.intrinsic_matrix, self.dist_coeffs, self.rvecs, self.tvecs = cv2.calibrateCamera(self.objpoints, self.imgpoints, ImgSize, None, None)
 
-        print("The projection error from the calibration is: ",
-              self.calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist,ShowProjectError))
-        return mtx
+        mean_normalized_error = self.calculate_reprojection_error(self.objpoints, self.imgpoints, self.rvecs, self.tvecs, self.intrinsic_matrix, self.dist_coeffs, ShowProjectError)
+        print(f"The Mean Normalized Reprojection Error: {mean_normalized_error}")
 
-    def calculate_reprojection_error(self, objpoints, imgpoints, rvecs, tvecs, mtx, dist,ShowPlot=False):
-        """Calculates the reprojection error of the camera for each image. The output is the mean reprojection error
-        If ShowPlot is True, it will show the reprojection error for each image in a bar graph"""
+        return self.intrinsic_matrix
 
-        total_error = 0
-        num_points = 0
+    # Utility function to calculate projection error for each image
+    def calculate_projection_error(self, objpoints, imgpoints, rvecs, tvecs, intrinsic_matrix, dist_coeffs):
+        total_normalized_error = 0
+        total_squared_error = 0
         errors = []
 
         for i in range(len(objpoints)):
-            imgpoints_projected, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
+            imgpoints_projected, _ = cv2.projectPoints(objpoints[i], rvecs[i], tvecs[i], intrinsic_matrix, dist_coeffs)
             imgpoints_projected = imgpoints_projected.reshape(-1, 1, 2)
             error = cv2.norm(imgpoints[i], imgpoints_projected, cv2.NORM_L2) / len(imgpoints_projected)
             errors.append(error)
-            total_error += error
-            num_points += 1
+            total_normalized_error += error
+            total_squared_error += error ** 2
 
-        mean_error = total_error / num_points
+        mean_normalized_error = total_normalized_error / len(objpoints)
+        mean_squared_error = total_squared_error / len(objpoints)
+        rms_error = np.sqrt(mean_squared_error)
+
+        return errors, mean_normalized_error, rms_error
+
+    def calculate_reprojection_error(self, objpoints, imgpoints, rvecs, tvecs, mtx, dist, ShowPlot=False):
+        """Calculates the reprojection error of the camera for each image. The output is the mean reprojection error
+        If ShowPlot is True, it will show the reprojection error for each image in a bar graph"""
+
+        errors, mean_normalized_error, rms_error = self.calculate_projection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist)
 
         if ShowPlot:
             # Plotting the bar graph
@@ -236,9 +287,10 @@ class CameraCalibration:
             print(errors)
 
             #Save the bar plot as a .png
-            fig.savefig('ReprojectionError.png')
+            fig.savefig('NormalizedReprojectionError.png')
 
-        return mean_error
+        # return mean_normalized_error
+        return rms_error
 
 if __name__== "__main__":
     # Create an instance of the class
