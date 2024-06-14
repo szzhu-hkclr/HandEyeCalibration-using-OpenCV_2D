@@ -70,21 +70,21 @@ class CameraCalibration:
         self.R_cam2target = [T[:3, :3] for T in self.T_cam2target]
         self.R_vec_cam2target = [cv2.Rodrigues(R)[0] for R in self.R_cam2target]
         self.T_cam2target = [T[:3, 3] for T in self.T_cam2target]   #4x4 transformation matrix
-
+        
         #Calculate T_Base2EE
-        self.REE2Base, self.R_vecEE2Base, self.tEE2Base = [], [], []
+        self.REE2Base, self.tEE2Base = [], []
+        self.Rbase2ee, self.Tbase2ee = [], []
         for i in range(len(self.T_base2EE_list)):
-            rot = Rot.from_quat(self.T_base2EE_list[i][3:]).as_matrix() #quat scalar-last (x, y, z, w) format
+            rot = Rot.from_quat(self.T_base2EE_list[i][3:]).as_matrix() #quat scalar-last (x, y, z, w) format          
+            self.Rbase2ee.append(rot)            
+            self.Tbase2ee.append(self.T_base2EE_list[i][0:3])
+
             homo_matrix = np.eye(4)
             homo_matrix[:3, :3] = rot
             homo_matrix[:3, 3] = self.T_base2EE_list[i][0:3]
             inv_homo_matrix = np.linalg.inv(homo_matrix)
             self.REE2Base.append(inv_homo_matrix[:3, :3])
             self.tEE2Base.append(inv_homo_matrix[:3, 3].reshape((3,1)))
-        # self.TEE2Base = [np.linalg.inv(T) for T in self.T_base2EE_list]
-        # self.REE2Base = [T[:3, :3] for T in self.TEE2Base]
-        self.R_vecEE2Base = [cv2.Rodrigues(R)[0] for R in self.REE2Base]
-        # self.tEE2Base = [T[:3, 3] for T in self.TEE2Base]
 
         #Create folder to save final transforms
         if not os.path.exists("FinalTransforms"):
@@ -101,21 +101,28 @@ class CameraCalibration:
         best_method = None
         # unbounded upper value for comparison. Useful for finding lowest values
         best_rms_error = float('inf')
-
         #solve hand-eye calibration
         for method_name, method in methods:
             self.R_cam2gripper, self.t_cam2gripper = cv2.calibrateHandEye(
-                self.R_cam2target,
-                self.T_cam2target,
-                self.R_vecEE2Base,
-                self.tEE2Base,
+                self.Rbase2ee,
+                self.Tbase2ee,
+                self.RTarget2Cam,
+                self.TTarget2Cam,
                 method=method
             )
-            
             #print and save each results as .npz file
             print(f"The Results for Method {method_name}:")
             print("R_cam2gripper:", self.R_cam2gripper)
             print("t_cam2gripper:", self.t_cam2gripper)
+            
+            eef2cam_matrix = np.eye(4)
+            eef2cam_matrix[:3, :3] = self.R_cam2gripper
+            eef2cam_matrix[:3, 3] = self.t_cam2gripper.reshape(3)
+            cam2ee_matrix = np.linalg.inv(eef2cam_matrix)
+            # 2 means transform to, i.e. the 1st frame is the base frame
+            # print("eef2cam_matrix:\n", eef2cam_matrix)
+            # print("cam2ee_matrix:\n", cam2ee_matrix)
+            
             #Create 4x4 transfromation matrix
             self.T_cam2gripper = np.concatenate((self.R_cam2gripper, self.t_cam2gripper), axis=1)
             self.T_cam2gripper = np.concatenate((self.T_cam2gripper, np.array([[0, 0, 0, 1]])), axis=0)
@@ -295,4 +302,4 @@ class CameraCalibration:
 if __name__== "__main__":
     # Create an instance of the class
     image_folder = "2024-06-06/"
-    calib = CameraCalibration(image_folder, pattern_size=(8, 9), square_size=0.02, ShowProjectError=True, ShowCorners=True)
+    calib = CameraCalibration(image_folder, pattern_size=(8, 9), square_size=0.02, ShowProjectError=False, ShowCorners=False)
