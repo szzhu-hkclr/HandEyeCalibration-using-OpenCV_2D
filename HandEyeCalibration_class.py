@@ -58,7 +58,8 @@ class CameraCalibration:
         #Calculate camera extrinsics
         self.RTarget2Cam, self.TTarget2Cam = self.compute_camera_poses(self.chessboard_corners,
                                                                        self.pattern_size, self.square_size,
-                                                                       self.intrinsic_matrix)
+                                                                       self.intrinsic_matrix,
+                                                                       self.dist_coeffs)
 
         #Convert to homogeneous transformation matrix
         self.T_target2cam = [np.concatenate((R, T), axis=1) for R, T in zip(self.RTarget2Cam, self.TTarget2Cam)]
@@ -205,7 +206,7 @@ class CameraCalibration:
                 i = i + 1
         return chessboard_corners, IndexWithImg
 
-    def compute_camera_poses(self, chessboard_corners, pattern_size, square_size, intrinsic_matrix, Testing=False):
+    def compute_camera_poses(self, chessboard_corners, pattern_size, square_size, intrinsic_matrix, dist_coeffs, Testing=False):
         """Takes the chessboard corners and computes the camera poses"""
         # Create the object points.Object points are points in the real world that we want to find the pose of.
         object_points = np.zeros((pattern_size[0] * pattern_size[1], 3), dtype=np.float32)
@@ -216,7 +217,7 @@ class CameraCalibration:
         TTarget2Cam = []
         i = 1
         for corners in chessboard_corners:
-            _, rvec, tvec = cv2.solvePnP(object_points, corners, intrinsic_matrix, None)
+            _, rvec, tvec = cv2.solvePnP(object_points, corners, intrinsic_matrix, dist_coeffs)
             # rvec is the rotation vector, tvec is the translation vector
             if Testing == True:
                 print("Current iteration: ", i, " out of ", len(chessboard_corners[0]), " iterations.")
@@ -254,6 +255,16 @@ class CameraCalibration:
         mean_normalized_error = self.calculate_reprojection_error(self.objpoints, self.imgpoints, self.rvecs, self.tvecs, self.intrinsic_matrix, self.dist_coeffs, ShowProjectError)
         print(f"The Mean Normalized Reprojection Error: {mean_normalized_error}")
 
+        #Hardcode TJ's cam intrinsic mat and dist_coeffs
+        self.intrinsic_matrix[0] = [3579.0434570313, 0.0,             1246.4215087891]
+        self.intrinsic_matrix[1] = [0.0,             3578.8725585938, 1037.0089111328]
+        self.intrinsic_matrix[2] = [0.0,             0.0,             1.0]
+        print(f"The hardcoded cam intrinsic: {self.intrinsic_matrix}")
+        #dist_coeffs = [k1, k2, p1, p2, k3]
+        self.dist_coeffs = [-0.0672596246, 0.1255717576, 0.0008782994, -0.0014749423, -0.0597795881]
+        self.dist_coeffs = np.array(self.dist_coeffs)
+        print(f"The hardcoded distortion coefficients: {self.dist_coeffs}")
+        
         return self.intrinsic_matrix
 
     # Utility function to calculate projection error for each image
