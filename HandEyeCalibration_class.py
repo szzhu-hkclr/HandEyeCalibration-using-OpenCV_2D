@@ -217,7 +217,8 @@ class CameraCalibration:
         TTarget2Cam = []
         i = 1
         for corners in chessboard_corners:
-            _, rvec, tvec = cv2.solvePnP(object_points, corners, intrinsic_matrix, dist_coeffs)
+            # Best-fit(?) solve PnP method for chessboard scenario :SOLVEPNP_IPPE
+            _, rvec, tvec = cv2.solvePnP(object_points, corners, intrinsic_matrix, dist_coeffs, None, None, False,  cv2.SOLVEPNP_IPPE)
             # rvec is the rotation vector, tvec is the translation vector
             if Testing == True:
                 print("Current iteration: ", i, " out of ", len(chessboard_corners[0]), " iterations.")
