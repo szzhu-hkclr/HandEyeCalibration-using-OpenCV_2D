@@ -116,10 +116,10 @@ class CameraCalibration:
             print("R_cam2gripper:", self.R_cam2gripper)
             print("t_cam2gripper:", self.t_cam2gripper)
             
-            eef2cam_matrix = np.eye(4)
-            eef2cam_matrix[:3, :3] = self.R_cam2gripper
-            eef2cam_matrix[:3, 3] = self.t_cam2gripper.reshape(3)
-            cam2ee_matrix = np.linalg.inv(eef2cam_matrix)
+            # eef2cam_matrix = np.eye(4)
+            # eef2cam_matrix[:3, :3] = self.R_cam2gripper
+            # eef2cam_matrix[:3, 3] = self.t_cam2gripper.reshape(3)
+            # cam2ee_matrix = np.linalg.inv(eef2cam_matrix)
             # 2 means transform to, i.e. the 1st frame is the base frame
             # print("eef2cam_matrix:\n", eef2cam_matrix)
             # print("cam2ee_matrix:\n", cam2ee_matrix)
@@ -313,5 +313,8 @@ class CameraCalibration:
 
 if __name__== "__main__":
     # Create an instance of the class
-    image_folder = "2024-06-06/"
-    calib = CameraCalibration(image_folder, pattern_size=(8, 9), square_size=0.02, ShowProjectError=False, ShowCorners=False)
+    # image_folder = "2024-06-06/"
+    # calib = CameraCalibration(image_folder, pattern_size=(8, 9), square_size=0.02, ShowProjectError=False, ShowCorners=False)
+
+    image_folder = "2024-06-17/"
+    calib = CameraCalibration(image_folder, pattern_size=(8, 11), square_size=0.015, ShowProjectError=False, ShowCorners=False)
