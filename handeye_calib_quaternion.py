@@ -49,6 +49,7 @@ def calculate_intrinsics(chessboard_corners, IndexWithImg, pattern_size, square_
 
     print("The projection error from the calibration is: ",
           calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist, ShowProjectError))
+    print(mtx)
     return mtx
 
 
@@ -82,6 +83,12 @@ def compute_camera_poses(chessboard_corners, pattern_size, square_size, intrinsi
         _, rvec, tvec = cv2.solvePnP(object_points, corners, intrinsic_matrix, None)
         if Testing:
             print("Current iteration: ", i, " out of ", len(chessboard_corners[0]), " iterations.")
+            print("rvec[0]: ", rvec[0])
+            print("rvec[1]: ", rvec[1])
+            print("rvec[2]: ", rvec[2])
+            print("tvec[0]: ", tvec[0])
+            print("tvec[1]: ", tvec[1])
+            print("tvec[2]: ", tvec[2])
         i = 1 + i
         R, _ = cv2.Rodrigues(rvec)
         RTarget2Cam.append(R)
