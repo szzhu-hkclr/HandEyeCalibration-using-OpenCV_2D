@@ -17,9 +17,9 @@ def find_chessboard_corners(images, pattern_size, ShowCorners=False):
         print(">>>>>>>>>>", i)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         ret, corners = cv2.findChessboardCorners(gray, pattern_size)
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        corners = cv2.cornerSubPix(gray, corners, (10, 10), (-1, -1), criteria)
-        if ret:
+        if ret:  # Only process if chessboard corners are found
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+            corners = cv2.cornerSubPix(gray, corners, (10, 10), (-1, -1), criteria)
             chessboard_corners.append(corners)
 
             cv2.drawChessboardCorners(image, pattern_size, corners, ret)
@@ -29,10 +29,9 @@ def find_chessboard_corners(images, pattern_size, ShowCorners=False):
                 plt.show()
 
             IndexWithImg.append(i)
-            i = i + 1
         else:
-            print("No chessboard found in image: ", i)
-            i = i + 1
+            print(f"No chessboard found in image: {i}")  # Log failed images
+        i += 1
     return chessboard_corners, IndexWithImg
 
 
