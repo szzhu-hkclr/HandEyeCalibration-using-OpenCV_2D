@@ -54,7 +54,8 @@ def calculate_intrinsics(chessboard_corners, IndexWithImg, pattern_size, square_
 
     print("The projection error from the calibration is: ",
           calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist, ShowProjectError))
-    print(mtx)
+    print("intrinsic_matrix:", mtx)
+    print("dist coefficient:", dist)
     return mtx
 
 
