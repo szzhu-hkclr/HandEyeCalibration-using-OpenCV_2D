@@ -47,7 +47,10 @@ def calculate_intrinsics(chessboard_corners, IndexWithImg, pattern_size, square_
 
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, ImgSize, None, None)
 
-
+    # mtx = np.array([[2247.24, 0., 1019.52],
+    #                 [0., 2245.15, 781.512],
+    #                 [0., 0., 1.]])
+    # dist = np.array([[-0.127476, 0.157168, 0.000106415, -0.000806452, -0.04221411]]) 
 
     print("The projection error from the calibration is: ",
           calculate_reprojection_error(objpoints, imgpoints, rvecs, tvecs, mtx, dist, ShowProjectError))
